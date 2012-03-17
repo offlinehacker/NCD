@@ -50,6 +50,7 @@
 #include <generated/blog_channel_NCDIfConfig.h>
 
 #define IP_CMD "ip"
+#define IP6_CMD "ip -6"
 #define RESOLVCONF_FILE "/etc/resolv.conf"
 #define RESOLVCONF_TEMP_FILE "/etc/resolv.conf-ncd-temp"
 #define TUN_DEVNODE "/dev/net/tun"
@@ -154,6 +155,32 @@ int NCDIfConfig_add_ipv4_addr (const char *ifname, struct ipv4_ifaddr ifaddr)
     return !run_command(cmd);
 }
 
+int NCDIfConfig_add_ipv6_addr (const char *ifname, struct ipv6_ifaddr ifaddr)
+{
+    ASSERT(ifaddr.prefix >= 0)
+    ASSERT(ifaddr.prefix <= 128)
+
+    if (strlen(ifname) >= IFNAMSIZ) {
+        BLog(BLOG_ERROR, "ifname too long");
+        return 0;
+    }
+
+    char cmd[70 + IFNAMSIZ];
+    sprintf(cmd, IP6_CMD" addr add"
+            " %02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
+            ":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
+            ":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
+            "/%d dev %s",
+            ifaddr.addr[0], ifaddr.addr[1], ifaddr.addr[2], ifaddr.addr[3],
+            ifaddr.addr[4], ifaddr.addr[5], ifaddr.addr[6], ifaddr.addr[7],
+            ifaddr.addr[8], ifaddr.addr[9], ifaddr.addr[10], ifaddr.addr[11],
+            ifaddr.addr[12], ifaddr.addr[13], ifaddr.addr[14], ifaddr.addr[15],
+            ifaddr.prefix, ifname
+    );
+
+    return !run_command(cmd);
+}
+
 int NCDIfConfig_remove_ipv4_addr (const char *ifname, struct ipv4_ifaddr ifaddr)
 {
     ASSERT(ifaddr.prefix >= 0)
@@ -169,6 +196,32 @@ int NCDIfConfig_remove_ipv4_addr (const char *ifname, struct ipv4_ifaddr ifaddr)
     char cmd[50 + IFNAMSIZ];
     sprintf(cmd, IP_CMD" addr del %"PRIu8".%"PRIu8".%"PRIu8".%"PRIu8"/%d dev %s", addr[0], addr[1], addr[2], addr[3], ifaddr.prefix, ifname);
     
+    return !run_command(cmd);
+}
+
+int NCDIfConfig_remove_ipv6_addr (const char *ifname, struct ipv6_ifaddr ifaddr)
+{
+    ASSERT(ifaddr.prefix >= 0)
+    ASSERT(ifaddr.prefix <= 128)
+
+    if (strlen(ifname) >= IFNAMSIZ) {
+        BLog(BLOG_ERROR, "ifname too long");
+        return 0;
+    }
+
+    char cmd[70 + IFNAMSIZ];
+    sprintf(cmd, IP6_CMD" addr del"
+            " %02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
+            ":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
+            ":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
+            "/%d dev %s",
+            ifaddr.addr[0], ifaddr.addr[1], ifaddr.addr[2], ifaddr.addr[3],
+            ifaddr.addr[4], ifaddr.addr[5], ifaddr.addr[6], ifaddr.addr[7],
+            ifaddr.addr[8], ifaddr.addr[9], ifaddr.addr[10], ifaddr.addr[11],
+            ifaddr.addr[12], ifaddr.addr[13], ifaddr.addr[14], ifaddr.addr[15],
+            ifaddr.prefix, ifname
+    );
+
     return !run_command(cmd);
 }
 
@@ -200,6 +253,52 @@ static int route_cmd (const char *cmdtype, struct ipv4_ifaddr dest, const uint32
     return !run_command(cmd);
 }
 
+static int route6_cmd (const char *cmdtype, struct ipv6_ifaddr dest, const uint8_t *gateway, int metric, const char *ifname)
+{
+    ASSERT(!strcmp(cmdtype, "add") || !strcmp(cmdtype, "del"))
+    ASSERT(dest.prefix >= 0)
+    ASSERT(dest.prefix <= 128)
+    
+    if (strlen(ifname) >= IFNAMSIZ) {
+        BLog(BLOG_ERROR, "ifname too long");
+        return 0;
+    }
+    
+    uint8_t *d_addr = (uint8_t *)dest.addr;
+    
+    char gwstr[40];
+    if (gateway) {
+        const uint8_t *g_addr = (uint8_t *)gateway;
+        sprintf(gwstr, " via"
+                " %02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
+                ":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
+                ":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8"",
+                g_addr[0], g_addr[1], g_addr[2], g_addr[3],
+                g_addr[4], g_addr[5], g_addr[6], g_addr[7],
+                g_addr[8], g_addr[9], g_addr[10], g_addr[11],
+                g_addr[12], g_addr[13], g_addr[14], g_addr[15]
+        );
+    } else {
+        gwstr[0] = '\0';
+    }
+    
+    char cmd[120 + IFNAMSIZ];
+    sprintf(cmd, IP6_CMD" route %s"
+            " %02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
+            ":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
+            ":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
+            "/%d%s metric %d dev %s",
+            cmdtype,
+            d_addr[0], d_addr[1], d_addr[2], d_addr[3],
+            d_addr[4], d_addr[5], d_addr[6], d_addr[7],
+            d_addr[8], d_addr[9], d_addr[10], d_addr[11],
+            d_addr[12], d_addr[13], d_addr[14], d_addr[15],
+            dest.prefix, gwstr, metric, ifname
+    );
+    
+    return !run_command(cmd);
+}
+
 int NCDIfConfig_add_ipv4_route (struct ipv4_ifaddr dest, const uint32_t *gateway, int metric, const char *device)
 {
     return route_cmd("add", dest, gateway, metric, device);
@@ -208,6 +307,16 @@ int NCDIfConfig_add_ipv4_route (struct ipv4_ifaddr dest, const uint32_t *gateway
 int NCDIfConfig_remove_ipv4_route (struct ipv4_ifaddr dest, const uint32_t *gateway, int metric, const char *device)
 {
     return route_cmd("del", dest, gateway, metric, device);
+}
+
+int NCDIfConfig_add_ipv6_route (struct ipv6_ifaddr dest, const uint8_t *gateway, int metric, const char *device)
+{
+    return route6_cmd("add", dest, gateway, metric, device);
+}
+
+int NCDIfConfig_remove_ipv6_route (struct ipv6_ifaddr dest, const uint8_t *gateway, int metric, const char *device)
+{
+    return route6_cmd("del", dest, gateway, metric, device);
 }
 
 static int blackhole_route_cmd (const char *cmdtype, struct ipv4_ifaddr dest, int metric)
@@ -225,6 +334,31 @@ static int blackhole_route_cmd (const char *cmdtype, struct ipv4_ifaddr dest, in
     return !run_command(cmd);
 }
 
+static int blackhole_route6_cmd (const char *cmdtype, struct ipv6_ifaddr dest, int metric)
+{
+    ASSERT(!strcmp(cmdtype, "add") || !strcmp(cmdtype, "del"))
+    ASSERT(dest.prefix >= 0)
+    ASSERT(dest.prefix <= 128)
+    
+    uint8_t *d_addr = (uint8_t *)dest.addr;
+    
+    char cmd[120];
+    sprintf(cmd, IP6_CMD" route %s blackhole"
+            " %02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
+            ":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
+            ":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
+            "/%d metric",
+            cmdtype,
+            d_addr[0], d_addr[1], d_addr[2], d_addr[3],
+            d_addr[4], d_addr[5], d_addr[6], d_addr[7],
+            d_addr[8], d_addr[9], d_addr[10], d_addr[11],
+            d_addr[12], d_addr[13], d_addr[14], d_addr[15],
+            dest.prefix, metric
+    );
+
+    return !run_command(cmd);
+}
+
 int NCDIfConfig_add_ipv4_blackhole_route (struct ipv4_ifaddr dest, int metric)
 {
     return blackhole_route_cmd("add", dest, metric);
@@ -233,6 +367,16 @@ int NCDIfConfig_add_ipv4_blackhole_route (struct ipv4_ifaddr dest, int metric)
 int NCDIfConfig_remove_ipv4_blackhole_route (struct ipv4_ifaddr dest, int metric)
 {
     return blackhole_route_cmd("del", dest, metric);
+}
+
+int NCDIfConfig_add_ipv6_blackhole_route (struct ipv6_ifaddr dest, int metric)
+{
+    return blackhole_route6_cmd("add", dest, metric);
+}
+
+int NCDIfConfig_remove_ipv6_blackhole_route (struct ipv6_ifaddr dest, int metric)
+{
+    return blackhole_route6_cmd("del", dest, metric);
 }
 
 int NCDIfConfig_set_dns_servers (uint32_t *servers, size_t num_servers)

@@ -1,6 +1,6 @@
 /**
  * @file NCDIfConfig.c
- * @author Ambroz Bizjak <ambrop7@gmail.com>
+ * @author Ambroz Bizjak <ambrop7@gmail.com>, Jaka Hudoklin <jakahudoklin@gmail.com>
  * 
  * @section LICENSE
  * 
@@ -347,7 +347,7 @@ static int blackhole_route6_cmd (const char *cmdtype, struct ipv6_ifaddr dest, i
             " %02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
             ":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
             ":%02"PRIx8"%02"PRIx8":%02"PRIx8"%02"PRIx8""
-            "/%d metric",
+            "/%d metric %d",
             cmdtype,
             d_addr[0], d_addr[1], d_addr[2], d_addr[3],
             d_addr[4], d_addr[5], d_addr[6], d_addr[7],

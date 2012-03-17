@@ -1,6 +1,6 @@
 /**
  * @file NCDIfConfig.h
- * @author Ambroz Bizjak <ambrop7@gmail.com>
+ * @author Ambroz Bizjak <ambrop7@gmail.com>, Jaka Hudoklin <jakahudoklin@gmail.com>
  * 
  * @section LICENSE
  * 

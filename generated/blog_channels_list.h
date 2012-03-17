@@ -108,3 +108,5 @@
 {.name = "ncd_sys_request_server", .loglevel = 4},
 {.name = "NCDRequest", .loglevel = 4},
 {.name = "ncd_net_ipv6_wait_dynamic_addr", .loglevel = 4},
+{.name = "ncd_net_ipv6_addr", .loglevel = 4},
+{.name = "ncd_net_ipv6_route", .loglevel = 4},

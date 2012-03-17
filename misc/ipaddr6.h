@@ -1,6 +1,6 @@
 /**
  * @file ipaddr6.h
- * @author Ambroz Bizjak <ambrop7@gmail.com>
+ * @author Ambroz Bizjak <ambrop7@gmail.com>, Jaka Hudoklin <jakahudoklin@gmail.com>
  * 
  * @section LICENSE
  * 
@@ -39,8 +39,10 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 
 #include <misc/debug.h>
+#include <misc/parse_number.h>
 
 // from /etc/iproute2/rt_scopes
 #define IPADDR6_SCOPE_GLOBAL 0
@@ -57,7 +59,13 @@ struct ipv6_ifaddr {
 #define IPADDR6_PRINT_MAX INET6_ADDRSTRLEN
 
 static int ipaddr6_print_addr (const uint8_t *addr, char *out_buf) WARN_UNUSED;
-
+static int ipaddr_parse_ipv6_addr_bin (char *name, size_t name_len, uint8_t *out_addr);
+static int ipaddr_parse_ipv6_addr (char *name, uint8_t *out_addr);
+static int ipaddr_parse_ipv6_prefix_bin (char *str, size_t str_len, int *num);
+static int ipaddr_parse_ipv6_prefix (char *str, int *num);
+static int ipaddr_parse_ipv6_ifaddr (char *str, struct ipv6_ifaddr *out);
+static void ipaddr_ipv6_mask_from_prefix (int prefix, uint8_t *mask);
+static int ipaddr_ipv6_addrs_in_network (uint8_t *addr1, uint8_t *addr2, int netprefix);
 
 int ipaddr6_print_addr (const uint8_t *addr, char *out_buf)
 {
@@ -74,6 +82,111 @@ int ipaddr6_print_addr (const uint8_t *addr, char *out_buf)
     }
     
     return 1;
+}
+
+int ipaddr_parse_ipv6_addr_bin (char *name, size_t name_len, uint8_t *out_addr)
+{
+   struct in6_addr result;
+   char local[INET6_ADDRSTRLEN];
+
+   if(name_len > sizeof(local) - 1) {
+       return 0;
+   }
+   memcpy(local, name, name_len);
+   local[name_len] = '\0';
+
+   if (inet_pton(AF_INET6, local, &result) != 1) {
+       return 0;
+   }
+
+   memcpy(out_addr, result.s6_addr, 16);
+   return 1;
+}
+
+int ipaddr_parse_ipv6_addr (char *name, uint8_t *out_addr)
+{
+    return ipaddr_parse_ipv6_addr_bin(name, strlen(name), out_addr);
+}
+
+int ipaddr_parse_ipv6_prefix_bin (char *str, size_t str_len, int *num)
+{
+    uintmax_t d;
+    if (!parse_unsigned_integer_bin(str, str_len, &d)) {
+        return 0;
+    }
+    if (d > 128) {
+        return 0;
+    }
+    
+    *num = d;
+    return 1;
+}
+
+int ipaddr_parse_ipv6_prefix (char *str, int *num)
+{
+    return ipaddr_parse_ipv6_prefix_bin(str, strlen(str), num);
+}
+
+int ipaddr_parse_ipv6_ifaddr (char *str, struct ipv6_ifaddr *out)
+{
+    char *slash = strstr(str, "/");
+    if (!slash) {
+        return 0;
+    }
+    
+    if (!ipaddr_parse_ipv6_addr_bin(str, (slash - str), out->addr)) {
+        return 0;
+    }
+    
+    if (!ipaddr_parse_ipv6_prefix(slash + 1, &out->prefix)) {
+        return 0;
+    }
+    
+    return 1;
+}
+
+void ipaddr_ipv6_mask_from_prefix (int prefix, uint8_t *mask)
+{
+   ASSERT(prefix >= 0)
+   ASSERT(prefix <= 128)
+
+   int quot = prefix / 8;
+   int rem = prefix % 8;
+
+   // set bytes with all bits set
+   memset(mask, 0xff, quot);
+
+   // clear the remaining bytes
+   memset(mask + quot, 0, 16 - quot);
+
+   // fix partial byte
+   for (int i = 0; i < rem; i++) {
+       mask[quot] |= 1 << (8 - i - 1);
+   }
+}
+
+int ipaddr_ipv6_addrs_in_network (uint8_t *addr1, uint8_t *addr2, int netprefix)
+{
+   ASSERT(netprefix >= 0)
+   ASSERT(netprefix <= 128)
+
+   // check bytes which fall completely inside the prefix
+   int quot = netprefix / 8;
+   if (memcmp(addr1, addr2, quot)) {
+       return 0;
+   }
+
+   // no remaining bits to check?
+   if (netprefix % 8 == 0) {
+       return 1;
+   }
+
+   // check remaining bits
+   uint8_t t = 0;
+   for (int i = 0; i < netprefix % 8; i++) {
+       t |= 1 << (8 - i - 1);
+   }
+   return ((addr1[quot] & t) == (addr2[quot] & t));
 }
 
 #endif
